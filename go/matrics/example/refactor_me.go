@@ -1,35 +1,38 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
 	"math"
-	"math/rand"
-	"time"
 
 	"github.com/ldeng7/matrics/go/matrics"
+	"github.com/ldeng7/matrics/go/matrics/neural"
 )
 
 const (
-	N        = 1 << 20
-	W, H, W1 = 1024, 768, 896
+	N        = 20240
+	W, H, W1 = 256 * 256, 10, 12
 )
 
-func runMatrixMulVector(stream matrics.Stream) error {
-	mx, err := matrics.NewMatrix(W, H)
+/*
+func runMatMulVec(stream matrics.Stream) error {
+	x, err := matrics.NewTensor(W, H, 1, 1)
 	if nil != err {
 		return err
 	}
-	defer mx.Destroy()
-	vy, err := matrics.NewVector(W)
+	defer x.Destroy()
+	y, err := matrics.NewTensor(W, 1, 1, 1)
 	if nil != err {
 		return err
 	}
-	defer vy.Destroy()
-	vz, err := matrics.NewVector(H)
+	defer y.Destroy()
+	z, err := matrics.NewTensor(H, 1, 1, 1)
 	if nil != err {
 		return err
 	}
-	defer vz.Destroy()
-	buf, err := mx.NewMatrixWideBuffer()
+	defer z.Destroy()
+	buf, err := x.NewMatFlatBuffer()
 	if nil != err {
 		return err
 	}
@@ -37,90 +40,86 @@ func runMatrixMulVector(stream matrics.Stream) error {
 
 	rand.Seed(time.Now().Unix())
 	for i := 0; i < W*H; i++ {
-		mx.Buf[i] = rand.Float32()
+		x.Data[i] = rand.Float32()
 	}
 	for i := 0; i < W; i++ {
-		vy.Buf[i] = rand.Float32()
+		y.Data[i] = rand.Float32()
 	}
 
 	t := time.Now()
 	for i := 0; i < 30; i++ {
-		mx.MulVector(vy, vz, stream)
+		x.MatMulVec(y, z, stream)
 	}
 	println(time.Now().Sub(t).Microseconds())
-	println(vz.Buf[0], vz.Buf[1], vz.Buf[H-1])
+	println(z.Data[0], z.Data[1], z.Data[H-1])
 
 	for i := 0; i < H; i++ {
-		vz.Buf[i] = 0
+		z.Data[i] = 0
 	}
 	t = time.Now()
 	for i := 0; i < 30; i++ {
-		if err := mx.WideMulVector(vy, vz, buf, stream); nil != err {
+		if err := x.MatFlatMulVec(y, z, buf, stream); nil != err {
 			return err
 		}
 	}
 	println(time.Now().Sub(t).Microseconds())
-	println(vz.Buf[0], vz.Buf[1], vz.Buf[H-1])
+	println(z.Data[0], z.Data[1], z.Data[H-1])
 	return nil
 }
 
-func runVectorTMulMatrix(stream matrics.Stream) error {
-	vx, err := matrics.NewVector(W)
+func runVecTMulMat(stream matrics.Stream) error {
+	x, err := matrics.NewTensor(W, 1, 1, 1)
 	if nil != err {
 		return err
 	}
-	defer vx.Destroy()
-	my, err := matrics.NewMatrix(W1, W)
+	defer x.Destroy()
+	y, err := matrics.NewTensor(W1, W, 1, 1)
 	if nil != err {
 		return err
 	}
-	defer my.Destroy()
-	vz, err := matrics.NewVector(W1)
+	defer y.Destroy()
+	z, err := matrics.NewTensor(W1, 1, 1, 1)
 	if nil != err {
 		return err
 	}
-	defer vz.Destroy()
+	defer z.Destroy()
 
 	rand.Seed(time.Now().Unix())
-	x, y, z := make([]float32, W), make([]float32, W1*W), make([]float32, W1)
 	for i := 0; i < W; i++ {
-		x[i] = rand.Float32()
+		x.Data[i] = rand.Float32()
 	}
 	for i := 0; i < W1*W; i++ {
-		y[i] = rand.Float32()
+		y.Data[i] = rand.Float32()
 	}
-	copy(vx.Buf, x)
-	copy(my.Buf, y)
 
 	t := time.Now()
-	for i := 0; i < 3; i++ {
-		for k := 0; k < W1; k++ {
-			var s float32
-			for h := 0; h < W; h++ {
-				s += x[h] * y[W1*h+k]
-			}
-			z[k] = s
-		}
+	for i := 0; i < 30; i++ {
+		x.VecTMulMat(y, z, stream)
 	}
 	println(time.Now().Sub(t).Microseconds())
-	println(z[0], z[1], z[W1-1])
+	println(z.Data[0], z.Data[1], z.Data[W1-1])
 
-	t = time.Now()
-	for i := 0; i < 3; i++ {
-		vx.TMulMatrix(my, vz, stream)
-	}
-	println(time.Now().Sub(t).Microseconds())
-	println(vz.Buf[0], vz.Buf[1], vz.Buf[W1-1])
+		for i := 0; i < W1; i++ {
+			z.Data[i] = 0
+		}
+		t = time.Now()
+		for i := 0; i < 30; i++ {
+			if err := x.MatFlatMulVec(y, z, buf, stream); nil != err {
+				return err
+			}
+		}
+		println(time.Now().Sub(t).Microseconds())
+		println(z.Data[0], z.Data[1], z.Data[H-1])
 	return nil
 }
 
-func runVectorPowScalar(stream matrics.Stream) error {
-	vx, err := matrics.NewVector(N)
+func runVecPowScalar(stream matrics.Stream) error {
+	vx, err := matrics.NewTensor(N)
 	if nil != err {
 		return err
 	}
 	defer vx.Destroy()
-	vy, err := matrics.NewVector(N)
+	vy, err := matrics.NewTensor(N)
 	if nil != err {
 		return err
 	}
@@ -131,7 +130,7 @@ func runVectorPowScalar(stream matrics.Stream) error {
 	for i := 0; i < N; i++ {
 		x[i] = rand.Float32()
 	}
-	copy(vx.Buf, x)
+	copy(vx.Data, x)
 
 	t := time.Now()
 	for i := 0; i < 1; i++ {
@@ -147,17 +146,17 @@ func runVectorPowScalar(stream matrics.Stream) error {
 		vx.PowScalar(1.732, vy, stream)
 	}
 	println(time.Now().Sub(t).Microseconds())
-	println(vy.Buf[0], vy.Buf[1], vy.Buf[N-1])
+	println(vy.Data[0], vy.Data[1], vy.Data[N-1])
 	return nil
 }
 
-func runVectorAddVector(stream matrics.Stream) error {
-	vx, err := matrics.NewVector(N)
+func runVecAddVec(stream matrics.Stream) error {
+	vx, err := matrics.NewTensor(N)
 	if nil != err {
 		return err
 	}
 	defer vx.Destroy()
-	vy, err := matrics.NewVector(N)
+	vy, err := matrics.NewTensor(N)
 	if nil != err {
 		return err
 	}
@@ -168,8 +167,8 @@ func runVectorAddVector(stream matrics.Stream) error {
 	for i := 0; i < N; i++ {
 		x[i], y[i] = rand.Float32(), rand.Float32()
 	}
-	copy(vx.Buf, x)
-	copy(vy.Buf, y)
+	copy(vx.Data, x)
+	copy(vy.Data, y)
 
 	t := time.Now()
 	for i := 0; i < 100; i++ {
@@ -182,15 +181,15 @@ func runVectorAddVector(stream matrics.Stream) error {
 
 	t = time.Now()
 	for i := 0; i < 100; i++ {
-		vx.AddVector(vy, vx, stream)
+		vx.AddVec(vy, vx, stream)
 	}
 	println(time.Now().Sub(t).Microseconds())
-	println(vx.Buf[0], vx.Buf[1], vx.Buf[N-1])
+	println(vx.Data[0], vx.Data[1], vx.Data[N-1])
 	return nil
 }
 
-func runVectorSum(stream matrics.Stream) error {
-	vx, err := matrics.NewVector(N)
+func runVecSum(stream matrics.Stream) error {
+	vx, err := matrics.NewTensor(N)
 	if nil != err {
 		return err
 	}
@@ -206,7 +205,7 @@ func runVectorSum(stream matrics.Stream) error {
 	for i := 0; i < N; i++ {
 		x[i] = rand.Float32()
 	}
-	copy(vx.Buf, x)
+	copy(vx.Data, x)
 
 	var r float32
 	t := time.Now()
@@ -228,13 +227,13 @@ func runVectorSum(stream matrics.Stream) error {
 	return nil
 }
 
-func runVectorDot(stream matrics.Stream) error {
-	vx, err := matrics.NewVector(N)
+func runVecDot(stream matrics.Stream) error {
+	vx, err := matrics.NewTensor(N)
 	if nil != err {
 		return err
 	}
 	defer vx.Destroy()
-	vy, err := matrics.NewVector(N)
+	vy, err := matrics.NewTensor(N)
 	if nil != err {
 		return err
 	}
@@ -250,8 +249,8 @@ func runVectorDot(stream matrics.Stream) error {
 	for i := 0; i < N; i++ {
 		x[i], y[i] = rand.Float32(), rand.Float32()
 	}
-	copy(vx.Buf, x)
-	copy(vy.Buf, y)
+	copy(vx.Data, x)
+	copy(vy.Data, y)
 
 	var r float32
 	t := time.Now()
@@ -273,18 +272,18 @@ func runVectorDot(stream matrics.Stream) error {
 	return nil
 }
 
-func runMatrixMulMatrix(stream matrics.Stream) error {
-	mx, err := matrics.NewMatrix(W, H)
+func runMatMulMat(stream matrics.Stream) error {
+	x, err := matrics.NewTensor(W, H)
 	if nil != err {
 		return err
 	}
-	defer mx.Destroy()
-	my, err := matrics.NewMatrix(W1, W)
+	defer x.Destroy()
+	my, err := matrics.NewTensor(W1, W)
 	if nil != err {
 		return err
 	}
 	defer my.Destroy()
-	mz, err := matrics.NewMatrix(W1, H)
+	mz, err := matrics.NewTensor(W1, H)
 	if nil != err {
 		return err
 	}
@@ -298,8 +297,8 @@ func runMatrixMulMatrix(stream matrics.Stream) error {
 	for i := 0; i < W1*W; i++ {
 		y[i] = rand.Float32()
 	}
-	copy(mx.Buf, x)
-	copy(my.Buf, y)
+	copy(x.Data, x)
+	copy(my.Data, y)
 
 	t := time.Now()
 	for i := 0; i < 3; i++ {
@@ -318,20 +317,20 @@ func runMatrixMulMatrix(stream matrics.Stream) error {
 
 	t = time.Now()
 	for i := 0; i < 3; i++ {
-		mx.MulMatrix(my, mz, stream)
+		x.MulMat(my, mz, stream)
 	}
 	println(time.Now().Sub(t).Microseconds())
-	println(mz.Buf[0], mz.Buf[1], mz.Buf[W1*H-2], mz.Buf[W1*H-1])
+	println(mz.Data[0], mz.Data[1], mz.Data[W1*H-2], mz.Data[W1*H-1])
 	return nil
 }
 
-func runMatrixT(stream matrics.Stream) error {
-	mx, err := matrics.NewMatrix(W, H)
+func runMatT(stream matrics.Stream) error {
+	x, err := matrics.NewTensor(W, H)
 	if nil != err {
 		return err
 	}
-	defer mx.Destroy()
-	my, err := matrics.NewMatrix(H, W)
+	defer x.Destroy()
+	my, err := matrics.NewTensor(H, W)
 	if nil != err {
 		return err
 	}
@@ -342,7 +341,7 @@ func runMatrixT(stream matrics.Stream) error {
 	for i := 0; i < W*H; i++ {
 		x[i] = rand.Float32()
 	}
-	copy(mx.Buf, x)
+	copy(x.Data, x)
 
 	t := time.Now()
 	for i := 0; i < 10; i++ {
@@ -357,26 +356,78 @@ func runMatrixT(stream matrics.Stream) error {
 
 	t = time.Now()
 	for i := 0; i < 3; i++ {
-		mx.T(my, stream)
+		x.T(my, stream)
 	}
 	println(time.Now().Sub(t).Microseconds())
-	println(my.Buf[0], my.Buf[1], my.Buf[W], my.Buf[W*H-2], my.Buf[W*H-1])
+	println(my.Data[0], my.Data[1], my.Data[W], my.Data[W*H-2], my.Data[W*H-1])
+	return nil
+}
+*/
+
+func runMachine(stream matrics.Stream) error {
+	m, err := neural.NewMachine([][]uint64{{3, 2}})
+	if nil != err {
+		return err
+	}
+	defer m.Destroy()
+
+	ss := []float32{0.3, 0.4, 0.5, 0.6,
+		0.7, 0.8, 0.9, 1,
+		1.1, 1.2, 1.3, 1.4,
+		1, -10, 1.2, -5,
+		2.1, 2.2, 2.3, 2.4, 2.5,
+		2.6, 2.7, 2.8, 2.9, 3,
+		3.1, 3.2, 3.3, 3.4, 3.5,
+		3.6, 3.7, 3.8, 3.9, 4,
+		1, -100, 1, -100, 1,
+	}
+	us := []uint32{}
+	for _, s := range ss {
+		us = append(us, math.Float32bits(s))
+	}
+	buf := bytes.NewBuffer(nil)
+	if err := binary.Write(buf, binary.BigEndian, us); nil != err {
+		return err
+	}
+	bs := buf.Bytes()
+
+	ps := &neural.ParameterSource{bytes.NewReader(bs), binary.BigEndian}
+	act := &matrics.Activation{matrics.ActivationTypeReLU, 0}
+	l, err := neural.NewFullConnChainLayer("1", ps, []uint64{3, 4}, 2, 5, act)
+	if nil != err {
+		return err
+	}
+	m.AddLayer(l)
+
+	if err := l.Connect(m.InputLayer(), 0, 0); nil != err {
+		return err
+	}
+
+	sl := m.Inputs()[0].Data
+	sl[0], sl[1], sl[2], sl[3], sl[4], sl[5] = 0.5, 1, 1.5, 2, 2.5, 3
+	defer matrics.DestroySlice(&sl)
+	if err := m.Run(stream); nil != err {
+		return err
+	}
+	fmt.Printf("%+v\n", l.Outputs()[0].Data)
 	return nil
 }
 
 func main() {
-	if err := matrics.LoadLib(); nil != err {
+	if err := matrics.Init(); nil != err {
 		println(err.Error())
 		return
 	}
-	defer matrics.ReleaseLib()
+	defer matrics.Uninit()
+
 	stream, err := matrics.NewStream()
 	if nil != err {
 		println(err.Error())
 		return
 	}
 	defer stream.Destroy()
-	if err := runMatrixMulVector(stream); nil != err {
+
+	if err := runMachine(stream); nil != err {
 		println(err.Error())
 	}
 }

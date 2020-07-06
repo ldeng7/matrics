@@ -2,125 +2,133 @@ package matrics
 
 import (
 	"fmt"
-	"reflect"
 	"syscall"
 	"unsafe"
 )
 
 // lib
 
-type MtFunc = *syscall.Proc
+type mtFunc = *syscall.Proc
 
 var mtLib *syscall.DLL
-var mtNewStream MtFunc
-var mtStreamDestroy MtFunc
-var mtBufferDestroy MtFunc
+var mtNewStream mtFunc
+var mtStreamDestroy mtFunc
+var mtNewTensor mtFunc
+var mtTensorDestroy mtFunc
+var mtBufferDestroy mtFunc
 
-var mtNewVector MtFunc
-var mtVectorDestroy MtFunc
+var mtVecAddScalar mtFunc
+var mtVecMulScalar mtFunc
+var mtVecMulAddScalar mtFunc
+var mtVecPowScalar mtFunc
+var mtVecPowMulScalar mtFunc
+var mtVecAddVec mtFunc
+var mtVecSubVec mtFunc
+var mtVecPatchMulVec mtFunc
 
-var mtVectorAddScalar MtFunc
-var mtVectorMulScalar MtFunc
-var mtVectorMulAddScalar MtFunc
-var mtVectorPowScalar MtFunc
-var mtVectorPowMulScalar MtFunc
-var mtVectorAddVector MtFunc
-var mtVectorSubVector MtFunc
-var mtVectorPatchMulVector MtFunc
-var mtVectorTMulMatrix MtFunc
+var mtNewVecAccBuffer mtFunc
+var mtVecSum mtFunc
+var mtVecSquareSum mtFunc
+var mtVecMin mtFunc
+var mtVecMax mtFunc
+var mtVecDot mtFunc
+var mtVecSumSquareSum mtFunc
+var mtVecDiffSquareSum mtFunc
 
-var mtNewVectorAccBuffer MtFunc
-var mtVectorSum MtFunc
-var mtVectorSquareSum MtFunc
-var mtVectorMin MtFunc
-var mtVectorMax MtFunc
-var mtVectorDot MtFunc
-var mtVectorSumSquareSum MtFunc
-var mtVectorDiffSquareSum MtFunc
+var mtMatT mtFunc
+var mtMatAddScalar mtFunc
+var mtMatMulScalar mtFunc
+var mtMatMulAddScalar mtFunc
+var mtMatPowScalar mtFunc
+var mtMatPowMulScalar mtFunc
+var mtMatAddMat mtFunc
+var mtMatSubMat mtFunc
 
-var mtNewMatrix MtFunc
-var mtMatrixDestroy MtFunc
+var mtMatMulMat mtFunc
+var mtVecTMulMat mtFunc
+var mtMatMulVec mtFunc
+var mtMatMulMatAddVecTAct mtFunc
+var mtVecTMulMatAddVecTAct mtFunc
+var mtNewMatFlatBuffer mtFunc
+var mtMatFlatMulVec mtFunc
 
-var mtMatrixT MtFunc
-var mtMatrixAddScalar MtFunc
-var mtMatrixMulScalar MtFunc
-var mtMatrixMulAddScalar MtFunc
-var mtMatrixAddMatrix MtFunc
-var mtMatrixSubMatrix MtFunc
-var mtMatrixMulMatrix MtFunc
-var mtMatrixMulVector MtFunc
+var mtCubConv2d mtFunc
+var mtTesConv2d mtFunc
+var mtCubCnnPool mtFunc
+var mtTesCnnPool mtFunc
 
-var mtNewMatrixWideBuffer MtFunc
-var mtMatrixWideMulVector MtFunc
-
-var mtFuncTable = map[string]*MtFunc{
+var mtFuncTable = map[string]*mtFunc{
 	"mtNewStream":     &mtNewStream,
 	"mtStreamDestroy": &mtStreamDestroy,
+	"mtNewTensor":     &mtNewTensor,
+	"mtTensorDestroy": &mtTensorDestroy,
 	"mtBufferDestroy": &mtBufferDestroy,
 
-	"mtNewVector":     &mtNewVector,
-	"mtVectorDestroy": &mtVectorDestroy,
+	"mtVecAddScalar":    &mtVecAddScalar,
+	"mtVecMulScalar":    &mtVecMulScalar,
+	"mtVecMulAddScalar": &mtVecMulAddScalar,
+	"mtVecPowScalar":    &mtVecPowScalar,
+	"mtVecPowMulScalar": &mtVecPowMulScalar,
+	"mtVecAddVec":       &mtVecAddVec,
+	"mtVecSubVec":       &mtVecSubVec,
+	"mtVecPatchMulVec":  &mtVecPatchMulVec,
 
-	"mtVectorAddScalar":      &mtVectorAddScalar,
-	"mtVectorMulScalar":      &mtVectorMulScalar,
-	"mtVectorMulAddScalar":   &mtVectorMulAddScalar,
-	"mtVectorPowScalar":      &mtVectorPowScalar,
-	"mtVectorPowMulScalar":   &mtVectorPowMulScalar,
-	"mtVectorAddVector":      &mtVectorAddVector,
-	"mtVectorSubVector":      &mtVectorSubVector,
-	"mtVectorPatchMulVector": &mtVectorPatchMulVector,
-	"mtVectorTMulMatrix":     &mtVectorTMulMatrix,
+	"mtNewVecAccBuffer":  &mtNewVecAccBuffer,
+	"mtVecSum":           &mtVecSum,
+	"mtVecSquareSum":     &mtVecSquareSum,
+	"mtVecMin":           &mtVecMin,
+	"mtVecMax":           &mtVecMax,
+	"mtVecDot":           &mtVecDot,
+	"mtVecSumSquareSum":  &mtVecSumSquareSum,
+	"mtVecDiffSquareSum": &mtVecDiffSquareSum,
 
-	"mtNewVectorAccBuffer":  &mtNewVectorAccBuffer,
-	"mtVectorSum":           &mtVectorSum,
-	"mtVectorSquareSum":     &mtVectorSquareSum,
-	"mtVectorMin":           &mtVectorMin,
-	"mtVectorMax":           &mtVectorMax,
-	"mtVectorDot":           &mtVectorDot,
-	"mtVectorSumSquareSum":  &mtVectorSumSquareSum,
-	"mtVectorDiffSquareSum": &mtVectorDiffSquareSum,
+	"mtMatT":            &mtMatT,
+	"mtMatAddScalar":    &mtMatAddScalar,
+	"mtMatMulScalar":    &mtMatMulScalar,
+	"mtMatMulAddScalar": &mtMatMulAddScalar,
+	"mtMatPowScalar":    &mtMatPowScalar,
+	"mtMatPowMulScalar": &mtMatPowMulScalar,
+	"mtMatAddMat":       &mtMatAddMat,
+	"mtMatSubMat":       &mtMatSubMat,
 
-	"mtNewMatrix":     &mtNewMatrix,
-	"mtMatrixDestroy": &mtMatrixDestroy,
+	"mtMatMulMat":            &mtMatMulMat,
+	"mtVecTMulMat":           &mtVecTMulMat,
+	"mtMatMulVec":            &mtMatMulVec,
+	"mtMatMulMatAddVecTAct":  &mtMatMulMatAddVecTAct,
+	"mtVecTMulMatAddVecTAct": &mtVecTMulMatAddVecTAct,
+	"mtNewMatFlatBuffer":     &mtNewMatFlatBuffer,
+	"mtMatFlatMulVec":        &mtMatFlatMulVec,
 
-	"mtMatrixT":            &mtMatrixT,
-	"mtMatrixAddScalar":    &mtMatrixAddScalar,
-	"mtMatrixMulScalar":    &mtMatrixMulScalar,
-	"mtMatrixMulAddScalar": &mtMatrixMulAddScalar,
-	"mtMatrixAddMatrix":    &mtMatrixAddMatrix,
-	"mtMatrixSubMatrix":    &mtMatrixSubMatrix,
-	"mtMatrixMulMatrix":    &mtMatrixMulMatrix,
-	"mtMatrixMulVector":    &mtMatrixMulVector,
-
-	"mtNewMatrixWideBuffer": &mtNewMatrixWideBuffer,
-	"mtMatrixWideMulVector": &mtMatrixWideMulVector,
+	"mtCubConv2d":  &mtCubConv2d,
+	"mtTesConv2d":  &mtTesConv2d,
+	"mtCubCnnPool": &mtCubCnnPool,
+	"mtTesCnnPool": &mtTesCnnPool,
 }
 
-func LoadLib() (err error) {
-	ReleaseLib()
-	if mtLib, err = syscall.LoadDLL("libmt.dll"); nil != err {
-		err = fmt.Errorf("failed to load DLL: %s", err.Error())
-		return
+func Init() (err error) {
+	if nil != mtLib {
+		return nil
 	}
 	defer func() {
 		if nil != err {
-			ReleaseLib()
+			Uninit()
 		}
 	}()
-
+	if mtLib, err = syscall.LoadDLL("libmt.dll"); nil != err {
+		return fmt.Errorf("failed to load DLL: %s", err.Error())
+	}
 	for k, f := range mtFuncTable {
-		var proc MtFunc
+		var proc mtFunc
 		if proc, err = mtLib.FindProc(k); nil == err {
 			*f = proc
 		} else {
-			err = fmt.Errorf("failed to load func: %s", k)
-			return
+			return fmt.Errorf("failed to load func: %s", k)
 		}
 	}
-	return
+	return nil
 }
 
-func ReleaseLib() {
+func Uninit() {
 	if nil != mtLib {
 		mtLib.Release()
 	}
@@ -130,13 +138,20 @@ func ReleaseLib() {
 
 const mtCodeSuccess = 0
 
-type mtErr struct {
+type mtError struct {
 	code int
 	msg  string
 }
 
-func (le *mtErr) Error() string {
-	return fmt.Sprintf("%s(cuda code: %d)", le.msg, le.code)
+func (e *mtError) Error() string {
+	return fmt.Sprintf("%s(cuda code: %d)", e.msg, e.code)
+}
+
+func newMtErr(code int, msg string) error {
+	if mtCodeSuccess != code {
+		return &mtError{code, msg}
+	}
+	return nil
 }
 
 type Stream uintptr
@@ -149,23 +164,11 @@ func NewStream() (Stream, error) {
 		uintptr(unsafe.Pointer(&code)),
 	)
 	if mtCodeSuccess != code {
-		return 0, &mtErr{code, ""}
+		return 0, &mtError{code, ""}
 	}
 	return stream, nil
 }
 
 func (s Stream) Destroy() {
 	mtStreamDestroy.Call(uintptr(s))
-}
-
-// utils
-
-func makeSlice(sl *[]float32, buf uintptr, length int) {
-	h := (*reflect.SliceHeader)(unsafe.Pointer(sl))
-	h.Data, h.Len, h.Cap = buf, length, length
-}
-
-func destroySlice(sl *[]float32) {
-	h := (*reflect.SliceHeader)(unsafe.Pointer(sl))
-	h.Data, h.Len, h.Cap = 0, 0, 0
 }
