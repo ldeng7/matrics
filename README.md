@@ -1,8 +1,9 @@
-### Requirements
+### Minimum Requirements
 
-- Windows 7 64-bit or higher 64-bit
-- Nvidia GPU with compute capability 3.0 or higher
+- Windows 7 64-bit or Linux 64-bit
+- Nvidia GPU and driver with compute capability 3.0
 
 for building the dynamic library:
 
-- CUDA SDK 6 or higher
+- CUDA SDK 6
+- Supported MSVC or GC with the CUDA SDK

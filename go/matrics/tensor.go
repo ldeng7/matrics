@@ -7,6 +7,8 @@ import (
 )
 
 var unsuitableShapeErr error = errors.New("unsuitable shape")
+var invalidDimErr error = errors.New("invalid dimension")
+var unsuitableBufferErr error = errors.New("unsuitable buffer")
 
 func makeSlice(sl *[]float32, buf uintptr, length int) {
 	h := (*reflect.SliceHeader)(unsafe.Pointer(sl))
@@ -18,47 +20,34 @@ func DestroySlice(sl *[]float32) {
 	h.Data, h.Len, h.Cap = 0, 0, 0
 }
 
-const TENSOR_DIM_LEN_MAX = 4
+const TENSOR_DIM_MAX = 3
+
+type TensorShape = [TENSOR_DIM_MAX + 1]uint32
 
 type Tensor struct {
-	handler        uintptr
-	n              uint64
-	nd             int
-	nx, ny, nz, nw uint64
-	Data           []float32
+	handle            tensorHandle
+	n, nx, ny, nz, nw uint32
+	shape             TensorShape
+	Data              []float32
 }
 
-func NewTensor(shape []uint64) (*Tensor, error) {
-	nd := len(shape)
-	if nd == 0 || nd > TENSOR_DIM_LEN_MAX {
-		return nil, errors.New("invalid dimension length")
+func NewTensor(shape []uint32) (*Tensor, error) {
+	if len(shape) == 0 || len(shape) > TENSOR_DIM_MAX+1 {
+		return nil, invalidDimErr
 	}
-	t := &Tensor{nd: nd, nx: 1, ny: 1, nz: 1, nw: 1}
-	for i, n := range shape {
-		if n == 0 {
-			return nil, errors.New("invalid shape")
-		}
-		switch i {
-		case 0:
-			t.nx = n
-		case 1:
-			t.ny = n
-		case 2:
-			t.nz = n
-		case 3:
-			t.nw = n
-		}
+	t := &Tensor{n: 1, shape: [...]uint32{1, 1, 1, 1}}
+	for _, n := range shape {
+		t.n *= n
 	}
-	t.n = t.nx * t.ny * t.nz * t.nw
+	if t.n == 0 {
+		return nil, unsuitableShapeErr
+	}
+	copy(t.shape[:], shape)
+	t.nx, t.ny, t.nz, t.nw = t.shape[0], t.shape[1], t.shape[2], t.shape[3]
 
 	var buf uintptr
 	var code int
-	mtNewTensor.Call(
-		uintptr(t.nx), uintptr(t.ny), uintptr(t.nz), uintptr(t.nw),
-		uintptr(unsafe.Pointer(&t.handler)),
-		uintptr(unsafe.Pointer(&buf)),
-		uintptr(unsafe.Pointer(&code)),
-	)
+	t.mtNew(&buf, &code)
 	if mtCodeSuccess != code {
 		return nil, &mtError{code, "failed to alloc"}
 	}
@@ -66,43 +55,88 @@ func NewTensor(shape []uint64) (*Tensor, error) {
 	return t, nil
 }
 
-func (t *Tensor) Destroy() {
-	DestroySlice(&t.Data)
-	mtTensorDestroy.Call(t.handler)
+func (t *Tensor) Shape() TensorShape {
+	return t.shape
 }
 
-func (t *Tensor) Len() uint64 {
-	return t.n
-}
-
-func (t *Tensor) DimLen() int {
-	return t.nd
-}
-
-func (t *Tensor) Shape() [TENSOR_DIM_LEN_MAX]uint64 {
-	return [...]uint64{t.nx, t.ny, t.nz, t.nw}
-}
-
-func (t *Tensor) ForEach(f func(e float32) float32) {
-	sl := t.Data
-	for i, e := range sl {
-		sl[i] = f(e)
+func (t *Tensor) AvailableDimLen() uint {
+	for i := TENSOR_DIM_MAX; i >= 0; i++ {
+		if t.shape[i] > 1 {
+			return uint(i + 1)
+		}
 	}
-	DestroySlice(&sl)
+	return 0
 }
 
-const (
-	ActivationTypeNone uint32 = iota
-	ActivationTypeReLU
-	ActivationTypeLReLU
-	ActivationTypeELU
-	ActivationTypeSwish
-)
-
-type Activation struct {
-	Typ uint32
-	Arg float32
+func NewFlattenTensor(shape TensorShape, startDim, endDim uint, collapse bool) (*Tensor, error) {
+	if startDim >= endDim || startDim > TENSOR_DIM_MAX || endDim > TENSOR_DIM_MAX {
+		return nil, invalidDimErr
+	}
+	for i := startDim + 1; i <= endDim; i++ {
+		shape[startDim] *= shape[i]
+	}
+	if collapse {
+		i := startDim + 1
+		for j := endDim + 1; j <= TENSOR_DIM_MAX; i, j = i+1, j+1 {
+			shape[i] = shape[j]
+		}
+		for ; i <= TENSOR_DIM_MAX; i++ {
+			shape[i] = 1
+		}
+	} else {
+		for i := startDim + 1; i <= endDim; i++ {
+			shape[i] = 1
+		}
+	}
+	return NewTensor(shape[:])
 }
 
-var ActivationNone *Activation = &Activation{ActivationTypeNone, 0}
-var ActivationReLU *Activation = &Activation{ActivationTypeReLU, 0}
+func NewConcatTensor(shapes []TensorShape, dim uint) (*Tensor, error) {
+	if dim > TENSOR_DIM_MAX {
+		return nil, invalidDimErr
+	}
+	shape := TensorShape{}
+	for i := uint(0); i <= TENSOR_DIM_MAX; i++ {
+		if i != dim {
+			shape[i] = shapes[0][i]
+			for j := 1; j < len(shapes); j++ {
+				if shape[i] != shapes[j][i] {
+					return nil, unsuitableShapeErr
+				}
+			}
+		} else {
+			for _, s := range shapes {
+				shape[i] += s[i]
+			}
+		}
+	}
+	return NewTensor(shape[:])
+}
+
+func (t *Tensor) ConcatFrom(ts []*Tensor, dim uint) error {
+	l := len(ts)
+	strides := make([]uint32, l)
+	var strideBase uint32 = 1
+	for i := uint(0); i < dim; i++ {
+		strideBase *= ts[0].shape[i]
+	}
+	for i, t := range ts {
+		strides[i] = strideBase * t.shape[dim]
+	}
+	offsets := make([]uint32, l)
+	offsets[0] = 0
+	for i := 1; i < l; i++ {
+		offsets[i] = offsets[i-1] + strides[i-1]
+	}
+
+	nRound := ts[0].n / strides[0]
+	var strideRound, offsetRound uint32 = offsets[l-1] + strides[l-1], 0
+	for i := uint32(0); i < nRound; i, offsetRound = i+1, offsetRound+strideRound {
+		for j, tIn := range ts {
+			sj := strides[j]
+			offsetOut, offsetIn := offsetRound+offsets[j], sj*i
+			copy(t.Data[offsetOut:offsetOut+sj], tIn.Data[offsetIn:offsetIn+sj])
+		}
+	}
+	return nil
+}
