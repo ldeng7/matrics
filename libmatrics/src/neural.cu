@@ -1,8 +1,7 @@
 #include "internal.h"
-#include <stdio.h>
 
-const uint32 MAT_NTB_X = 32;
-const uint32 MAT_NTB_Y = 32;
+const uint32 NTB_X = 32;
+const uint32 NTB_Y = 32;
 
 #define activate(e, act) \
     switch (act.typ) { \
@@ -14,8 +13,8 @@ const uint32 MAT_NTB_Y = 32;
 
 __global__ void devMatMulMatAddVecTAct(float *x, float *y, float *z, float *w, uint32 m, uint32 n, uint32 l,
         MtNnActivation act) {
-    uint32 i = blockIdx.x * MAT_NTB_X + threadIdx.x;
-    uint32 j = blockIdx.y * MAT_NTB_Y + threadIdx.y;
+    uint32 i = blockIdx.x * NTB_X + threadIdx.x;
+    uint32 j = blockIdx.y * NTB_Y + threadIdx.y;
     if (i >= l || j >= m) return;
     float s = 0;
     uint32 nj = n * j;
@@ -29,17 +28,17 @@ __global__ void devMatMulMatAddVecTAct(float *x, float *y, float *z, float *w, u
 
 __export void mtMatMulMatAddVecTAct(MtTensor *pX, MtTensor *pY, MtTensor *pZ, MtTensor *pW, MtNnActivation *act,
         cudaStream_t stream, int *pCode) {
-    uint32 nbx = divCeil(pY->nx, MAT_NTB_X);
-    uint32 nby = divCeil(pX->ny, MAT_NTB_Y);
+    uint32 nbx = divCeil(pY->nx, NTB_X);
+    uint32 nby = divCeil(pX->ny, NTB_Y);
     cudaGetLastError();
-    devMatMulMatAddVecTAct<<<dim3(nbx, nby, 1), dim3(MAT_NTB_X, MAT_NTB_Y, 1), 0, stream>>>(
+    devMatMulMatAddVecTAct<<<dim3(nbx, nby, 1), dim3(NTB_X, NTB_Y, 1), 0, stream>>>(
         pX->p, pY->p, pZ->p, pW->p, pX->ny, pX->nx, pY->nx, *act);
     syncCheck(stream, pCode);
 }
 
 __global__ void devVecTMulMatAddVecTAct(float *x, float *y, float *z, float *w, uint32 n, uint32 l,
         MtNnActivation act) {
-    uint32 i = blockIdx.x * MAT_NTB_X + threadIdx.x;
+    uint32 i = blockIdx.x * NTB_X + threadIdx.x;
     if (i >= l) return;
     float s = 0;
     for (uint32 k = 0; k < n; k++) {
@@ -53,7 +52,7 @@ __global__ void devVecTMulMatAddVecTAct(float *x, float *y, float *z, float *w, 
 __export void mtVecTMulMatAddVecTAct(MtTensor *pX, MtTensor *pY, MtTensor *pZ, MtTensor *pW, MtNnActivation *act,
         cudaStream_t stream, int *pCode) {
     cudaGetLastError();
-    devVecTMulMatAddVecTAct<<<divCeil(pY->nx, MAT_NTB_X), MAT_NTB_X, 0, stream>>>(
+    devVecTMulMatAddVecTAct<<<divCeil(pY->nx, NTB_X), NTB_X, 0, stream>>>(
         pX->p, pY->p, pZ->p, pW->p, pX->nx, pY->nx, *act);
     syncCheck(stream, pCode);
 }
@@ -62,8 +61,8 @@ __export void mtVecTMulMatAddVecTAct(MtTensor *pX, MtTensor *pY, MtTensor *pZ, M
 // szc: {x: width, y: height}
 __global__ void devCubConv2dSame(float *x, float *y, float *z, float *w, uint3 szi, uint2 szc, uint3 szo,
         MtConv2dConf conf) {
-    int32 io = blockIdx.x * MAT_NTB_X + threadIdx.x;
-    int32 jo = blockIdx.y * MAT_NTB_Y + threadIdx.y;
+    int32 io = blockIdx.x * NTB_X + threadIdx.x;
+    int32 jo = blockIdx.y * NTB_Y + threadIdx.y;
     int32 ko = blockIdx.z;
     if (io >= szo.x || jo >= szo.y) return;
 
@@ -100,8 +99,8 @@ __global__ void devCubConv2dSame(float *x, float *y, float *z, float *w, uint3 s
 
 __global__ void devCubConv2dValid(float *x, float *y, float *z, float *w, uint3 szi, uint2 szc, uint3 szo,
         MtConv2dConf conf) {
-    uint32 io = blockIdx.x * MAT_NTB_X + threadIdx.x;
-    uint32 jo = blockIdx.y * MAT_NTB_Y + threadIdx.y;
+    uint32 io = blockIdx.x * NTB_X + threadIdx.x;
+    uint32 jo = blockIdx.y * NTB_Y + threadIdx.y;
     uint32 ko = blockIdx.z;
     if (io >= szo.x || jo >= szo.y) return;
 
@@ -136,8 +135,8 @@ __export void mtCubBatchConv2d(MtTensor *pX, MtTensor *pY, MtTensor *pZ, MtTenso
     uint3 szo = make_uint3(pW->nx, pW->ny, pW->nz);
     uint32 strideX = szi.x * szi.y * szi.z;
     uint32 strideW = szo.x * szo.y * szo.z;
-    uint32 nbx = divCeil(szo.x, MAT_NTB_X);
-    uint32 nby = divCeil(szo.y, MAT_NTB_Y);
+    uint32 nbx = divCeil(szo.x, NTB_X);
+    uint32 nby = divCeil(szo.y, NTB_Y);
 
     auto f = devCubConv2dSame;
     switch (conf->cnn.paddingTyp) {
@@ -145,15 +144,15 @@ __export void mtCubBatchConv2d(MtTensor *pX, MtTensor *pY, MtTensor *pZ, MtTenso
     }
     cudaGetLastError();
     for (uint32 i = 0; i < pX->nw; i++, px += strideX, pw += strideW) {
-        f<<<dim3(nbx, nby, szo.z), dim3(MAT_NTB_X, MAT_NTB_Y, 1), 0, stream>>>(
+        f<<<dim3(nbx, nby, szo.z), dim3(NTB_X, NTB_Y, 1), 0, stream>>>(
             px, pY->p, pZ->p, pw, szi, szc, szo, *conf);
     }
     syncCheck(stream, pCode);
 }
 
 #define devCubPool2dSame(rInit, rExp, rFinish) \
-    int32 io = blockIdx.x * MAT_NTB_X + threadIdx.x; \
-    int32 jo = blockIdx.y * MAT_NTB_Y + threadIdx.y; \
+    int32 io = blockIdx.x * NTB_X + threadIdx.x; \
+    int32 jo = blockIdx.y * NTB_Y + threadIdx.y; \
     int32 k = blockIdx.z; \
     if (io >= szo.x || jo >= szo.y) return; \
     int32 icb = (szo.x - 1) * conf.cnn.strideX + conf.coreX - szi.x; \
@@ -181,8 +180,8 @@ __export void mtCubBatchConv2d(MtTensor *pX, MtTensor *pY, MtTensor *pZ, MtTenso
     y[szo.x * szo.y * k + szo.x * jo + io] = r;
 
 #define devCubPool2dValid(rInit, rExp, rFinish) \
-    uint32 io = blockIdx.x * MAT_NTB_X + threadIdx.x; \
-    uint32 jo = blockIdx.y * MAT_NTB_Y + threadIdx.y; \
+    uint32 io = blockIdx.x * NTB_X + threadIdx.x; \
+    uint32 jo = blockIdx.y * NTB_Y + threadIdx.y; \
     uint32 k = blockIdx.z; \
     if (io >= szo.x || jo >= szo.y) return; \
     uint32 ib = io * conf.cnn.strideX; \
@@ -223,8 +222,8 @@ __export void mtCubBatchPool2d(MtTensor *pX, MtTensor *pY, MtPool2dConf *conf, c
     uint2 szo = make_uint2(pY->nx, pY->ny);
     uint32 strideX = szi.x * szi.y * szi.z;
     uint32 strideY = szo.x * szo.y * szi.z;
-    uint32 nbx = divCeil(szo.x, MAT_NTB_X);
-    uint32 nby = divCeil(szo.y, MAT_NTB_Y);
+    uint32 nbx = divCeil(szo.x, NTB_X);
+    uint32 nby = divCeil(szo.y, NTB_Y);
 
     auto f = devCubPool2dSameMax;
     switch (conf->cnn.paddingTyp) {
@@ -240,7 +239,7 @@ __export void mtCubBatchPool2d(MtTensor *pX, MtTensor *pY, MtPool2dConf *conf, c
     }
     cudaGetLastError();
     for (uint32 i = 0; i < pX->nw; i++, px += strideX, py += strideY) {
-        f<<<dim3(nbx, nby, pY->nz), dim3(MAT_NTB_X, MAT_NTB_Y, 1), 0, stream>>>(
+        f<<<dim3(nbx, nby, pY->nz), dim3(NTB_X, NTB_Y, 1), 0, stream>>>(
             px, py, szi, szo, *conf);
     }
     syncCheck(stream, pCode);

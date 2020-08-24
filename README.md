@@ -6,4 +6,4 @@
 for building the dynamic library:
 
 - CUDA SDK 6
-- Supported MSVC or GC with the CUDA SDK
+- Supported MSVC or GCC with the CUDA SDK

@@ -12,8 +12,8 @@ __export void mtNewTensor(uint32 nx, uint32 ny, uint32 nz, uint32 nw,
     pTen->ny = ny;
     pTen->nz = nz;
     pTen->nw = nw;
-    pTen->n = nx * ny * nz * nw;
-    if (cudaSuccess != (*pCode = cudaMallocManaged(&(pTen->p), sizeof(float) * pTen->n))) {
+    uint32 n = nx * ny * nz * nw;
+    if (cudaSuccess != (*pCode = cudaMallocManaged(&(pTen->p), sizeof(float) * n))) {
         free(pTen);
         return;
     }

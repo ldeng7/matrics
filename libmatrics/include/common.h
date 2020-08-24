@@ -6,7 +6,6 @@ typedef unsigned int uint32;
 
 typedef struct {
     float *p;
-    uint32 n;
     uint32 nx, ny, nz, nw;
 } MtTensor;
 

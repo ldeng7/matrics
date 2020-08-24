@@ -2,19 +2,19 @@
 
 // ind
 
-const uint32 MAT_NTB_X = 32;
-const uint32 MAT_NTB_Y = 32;
+const uint32 NTB_X = 32;
+const uint32 NTB_Y = 32;
 
 #define devMatInd(...) \
-    uint32 i = blockIdx.x * MAT_NTB_X + threadIdx.x; \
-    uint32 j = blockIdx.y * MAT_NTB_Y + threadIdx.y; \
+    uint32 i = blockIdx.x * NTB_X + threadIdx.x; \
+    uint32 j = blockIdx.y * NTB_Y + threadIdx.y; \
     if (i < n && j < m) { __VA_ARGS__; }
 
 #define mtMatInd(devFunc, ...) \
-    uint32 nbx = divCeil(pX->nx, MAT_NTB_X); \
-    uint32 nby = divCeil(pX->ny, MAT_NTB_Y); \
+    uint32 nbx = divCeil(pX->nx, NTB_X); \
+    uint32 nby = divCeil(pX->ny, NTB_Y); \
     cudaGetLastError(); \
-    devFunc<<<dim3(nbx, nby, 1), dim3(MAT_NTB_X, MAT_NTB_Y, 1), 0, stream>>>( \
+    devFunc<<<dim3(nbx, nby, 1), dim3(NTB_X, NTB_Y, 1), 0, stream>>>( \
         pX->p, pX->ny, pX->nx, __VA_ARGS__); \
     syncCheck(stream, pCode);
 
@@ -100,8 +100,8 @@ __export void mtMatSubMat(MtTensor *pX, MtTensor *pY, MtTensor *pZ,
 // matmul
 
 __global__ void devMatMulMat(float *x, float *y, float *z, uint32 m, uint32 n, uint32 l) {
-    uint32 i = blockIdx.x * MAT_NTB_X + threadIdx.x;
-    uint32 j = blockIdx.y * MAT_NTB_Y + threadIdx.y;
+    uint32 i = blockIdx.x * NTB_X + threadIdx.x;
+    uint32 j = blockIdx.y * NTB_Y + threadIdx.y;
     if (i >= l || j >= m) return;
     float s = 0;
     uint32 nj = n * j;
@@ -113,16 +113,16 @@ __global__ void devMatMulMat(float *x, float *y, float *z, uint32 m, uint32 n, u
 
 __export void mtMatMulMat(MtTensor *pX, MtTensor *pY, MtTensor *pZ,
         cudaStream_t stream, int *pCode) {
-    uint32 nbx = divCeil(pY->nx, MAT_NTB_X);
-    uint32 nby = divCeil(pX->ny, MAT_NTB_Y);
+    uint32 nbx = divCeil(pY->nx, NTB_X);
+    uint32 nby = divCeil(pX->ny, NTB_Y);
     cudaGetLastError();
-    devMatMulMat<<<dim3(nbx, nby, 1), dim3(MAT_NTB_X, MAT_NTB_Y, 1), 0, stream>>>(
+    devMatMulMat<<<dim3(nbx, nby, 1), dim3(NTB_X, NTB_Y, 1), 0, stream>>>(
         pX->p, pY->p, pZ->p, pX->ny, pX->nx, pY->nx);
     syncCheck(stream, pCode);
 }
 
 __global__ void devVecTMulMat(float *x, float *y, float *z, uint32 n, uint32 l) {
-    uint32 i = blockIdx.x * MAT_NTB_X + threadIdx.x;
+    uint32 i = blockIdx.x * NTB_X + threadIdx.x;
     if (i >= l) return;
     float s = 0;
     for (uint32 k = 0; k < n; k++) {
@@ -134,13 +134,13 @@ __global__ void devVecTMulMat(float *x, float *y, float *z, uint32 n, uint32 l) 
 __export void mtVecTMulMat(MtTensor *pX, MtTensor *pY, MtTensor *pZ,
         cudaStream_t stream, int *pCode) {
     cudaGetLastError();
-    devVecTMulMat<<<divCeil(pY->nx, MAT_NTB_X), MAT_NTB_X, 0, stream>>>(
+    devVecTMulMat<<<divCeil(pY->nx, NTB_X), NTB_X, 0, stream>>>(
         pX->p, pY->p, pZ->p, pX->nx, pY->nx);
     syncCheck(stream, pCode);
 }
 
 __global__ void devMatMulVec(float *x, float *y, float *z, uint32 m, uint32 n) {
-    uint32 j = blockIdx.x * MAT_NTB_Y + threadIdx.x;
+    uint32 j = blockIdx.x * NTB_Y + threadIdx.x;
     if (j >= m) return;
     float s = 0;
     uint32 nj = n * j;
@@ -153,7 +153,7 @@ __global__ void devMatMulVec(float *x, float *y, float *z, uint32 m, uint32 n) {
 __export void mtMatMulVec(MtTensor *pX, MtTensor *pY, MtTensor *pZ,
         cudaStream_t stream, int *pCode) {
     cudaGetLastError();
-    devMatMulVec<<<divCeil(pX->ny, MAT_NTB_Y), MAT_NTB_Y, 0, stream>>>(
+    devMatMulVec<<<divCeil(pX->ny, NTB_Y), NTB_Y, 0, stream>>>(
         pX->p, pY->p, pZ->p, pX->ny, pX->nx);
     syncCheck(stream, pCode);
 }

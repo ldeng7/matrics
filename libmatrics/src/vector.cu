@@ -2,15 +2,15 @@
 
 // ind
 
-const uint32 VEC_IND_NTB = 512;
+const uint32 IND_NTB = 512;
 
 #define devVecInd(exp) \
-    uint32 i = blockIdx.x * VEC_IND_NTB + threadIdx.x; \
+    uint32 i = blockIdx.x * IND_NTB + threadIdx.x; \
     if (i < n) { exp; }
 
 #define mtVecInd(devFunc, ...) \
     cudaGetLastError(); \
-    devFunc<<<divCeil(pX->nx, VEC_IND_NTB), VEC_IND_NTB, 0, stream>>>( \
+    devFunc<<<divCeil(pX->nx, IND_NTB), IND_NTB, 0, stream>>>( \
         pX->p, pX->nx, __VA_ARGS__); \
     syncCheck(stream, pCode);
 
@@ -88,22 +88,22 @@ __export void mtVecPatchMulVec(MtTensor *pX, MtTensor *pY, MtTensor *pZ,
 
 // acc
 
-const uint32 VEC_ACC_NTB = 512;
-const uint32 VEC_ACC_NPT = 8;
+const uint32 ACC_NTB = 512;
+const uint32 ACC_NPT = 8;
 
 __export void mtNewVecAccBuffer(MtTensor *pTen, buffer *pBuf, int *pCode) {
-    newBuffer(divCeil(pTen->nx, VEC_ACC_NTB * VEC_ACC_NPT), pBuf, pCode);
+    newBuffer(divCeil(pTen->nx, ACC_NTB * ACC_NPT), pBuf, pCode);
 }
 
 #define devVecAcc(rtInit, rbExp, ...) \
     uint32 itb = threadIdx.x; \
-    uint32 i = blockIdx.x * VEC_ACC_NTB * VEC_ACC_NPT + itb; \
+    uint32 i = blockIdx.x * ACC_NTB * ACC_NPT + itb; \
     float rt = (rtInit); \
-    for (uint32 j = 0; j < VEC_ACC_NPT && i < n; j++, i += VEC_ACC_NTB) { __VA_ARGS__; } \
-    __shared__ float rb[VEC_ACC_NTB]; \
+    for (uint32 j = 0; j < ACC_NPT && i < n; j++, i += ACC_NTB) { __VA_ARGS__; } \
+    __shared__ float rb[ACC_NTB]; \
     rb[itb] = rt; \
     __syncthreads(); \
-    for (uint32 i = VEC_ACC_NTB >> 1; i != 0; i >>= 1) { \
+    for (uint32 i = ACC_NTB >> 1; i != 0; i >>= 1) { \
         if (itb < i) { rbExp; } \
         __syncthreads(); \
     } \
@@ -111,9 +111,9 @@ __export void mtNewVecAccBuffer(MtTensor *pTen, buffer *pBuf, int *pCode) {
 
 #define mtVecAcc(devFunc, rInit, rExp, ...) \
     float *rg = (float *)buf; \
-    uint32 nb = divCeil(pX->nx, VEC_ACC_NTB * VEC_ACC_NPT); \
+    uint32 nb = divCeil(pX->nx, ACC_NTB * ACC_NPT); \
     cudaGetLastError(); \
-    devFunc<<<nb, VEC_ACC_NTB, 0, stream>>>(pX->p, pX->nx, __VA_ARGS__); \
+    devFunc<<<nb, ACC_NTB, 0, stream>>>(pX->p, pX->nx, __VA_ARGS__); \
     syncCheck(stream, pCode); \
     float r = (rInit); \
     for (uint32 i = 0; i < nb; i++) { rExp; } \
